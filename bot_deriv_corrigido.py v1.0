@@ -6,7 +6,7 @@ from dash.dependencies import Input, Output
 import threading, websocket, json, time
 
 token = "COLE_SEU_TOKEN_AQUI"
-symbol = "frxEURUSD"
+symbol = ""
 candles = []
 
 def on_message(ws, message):
