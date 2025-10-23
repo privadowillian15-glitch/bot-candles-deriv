@@ -1,0 +1,61 @@
+import dash
+from dash import dcc, html
+import pandas as pd
+import plotly.graph_objects as go
+from dash.dependencies import Input, Output
+import threading, websocket, json, time
+
+token = "COLE_SEU_TOKEN_AQUI"
+symbol = "frxEURUSD"
+candles = []
+
+def on_message(ws, message):
+    global candles
+    data = json.loads(message)
+    if "ohlc" in data:
+        candles.append(data["ohlc"])
+        candles = candles[-200:]  # mantém 200 candles no máximo
+
+def start_ws():
+    ws = websocket.WebSocketApp(
+        "wss://ws.derivws.com/websockets/v3",
+        on_message=on_message
+    )
+    ws.on_open = lambda ws: ws.send(json.dumps({
+        "ticks_history": symbol,
+        "adjust_start_time": 1,
+        "count": 100,
+        "end": "latest",
+        "granularity": 60,
+        "style": "candles"
+    }))
+    ws.run_forever()
+
+threading.Thread(target=start_ws).start()
+
+app = dash.Dash(__name__)
+
+app.layout = html.Div([
+    html.H1("Bot Deriv - Candles em Tempo Real"),
+    dcc.Graph(id='candlestick-graph'),
+    dcc.Interval(id='interval-component', interval=2000, n_intervals=0)
+])
+
+@app.callback(Output('candlestick-graph', 'figure'),
+              Input('interval-component', 'n_intervals'))
+def update_graph(n):
+    if not candles:
+        return go.Figure()
+    df = pd.DataFrame(candles)
+    fig = go.Figure(data=[go.Candlestick(
+        x=df["open_time"],
+        open=df["open"],
+        high=df["high"],
+        low=df["low"],
+        close=df["close"]
+    )])
+    fig.update_layout(xaxis_rangeslider_visible=False)
+    return fig
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
